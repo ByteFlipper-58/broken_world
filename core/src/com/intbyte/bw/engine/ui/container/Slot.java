@@ -6,8 +6,18 @@ import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.Sprite;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.scenes.scene2d.Actor;
+// InputEvent and InputListener might still be needed for other interactions, but the complex drag logic is removed.
+import com.badlogic.gdx.Gdx; // Import Gdx
+// import com.badlogic.gdx.scenes.scene2d.InputEvent; // Keep commented
+// import com.badlogic.gdx.scenes.scene2d.InputListener; // Keep commented
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
-import com.badlogic.gdx.scenes.scene2d.InputListener;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
+import com.badlogic.gdx.scenes.scene2d.ui.Image; // For drag actor
+import com.badlogic.gdx.scenes.scene2d.ui.Label; // For drag actor count
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop;
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop.Payload;
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop.Source;
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop.Target;
 import com.badlogic.gdx.utils.Array;
 import com.intbyte.bw.engine.item.Container;
 import com.intbyte.bw.engine.item.Item;
@@ -16,134 +26,186 @@ import com.intbyte.bw.engine.utils.Resource;
 
 public class Slot extends Actor {
     private final static BitmapFont font = new BitmapFont();
-    private boolean touchedDown;
-    private final static Vector2 touchPosition = new Vector2(), oldPosition = new Vector2();
+    // Fields related to old drag system are fully removed now.
+
     private final SlotSkin slotSkin;
     private Container container;
     private float itemSize;
-    private final TakenItems takenItems = TakenItems.getInstance();
-    private boolean isSelect;
-    private boolean drag;
+    private final DragAndDrop dragAndDrop; // Add DragAndDrop field
+    private boolean isSelected = false; // Flag to indicate if the slot is selected (for highlighting)
 
-    public Slot(){
-        this(64);
+    // Updated constructors to accept DragAndDrop
+    public Slot(DragAndDrop dragAndDrop){
+        this(64, dragAndDrop);
     }
-    public Slot(int maxCountItems){
-        this(new Container(maxCountItems));
+    public Slot(int maxCountItems, DragAndDrop dragAndDrop){
+        this(new Container(maxCountItems), dragAndDrop);
     }
 
-    public Slot(Container container){
-        this(SlotSkin.DEFAULT,container);
+    public Slot(Container container, DragAndDrop dragAndDrop){
+        this(SlotSkin.DEFAULT, container, dragAndDrop);
     }
-    public Slot(SlotSkin skin, final Container container) {
+
+    public Slot(SlotSkin skin, final Container container, DragAndDrop dragAndDrop) {
         slotSkin = skin;
         this.container = container;
-        addListener(new InputListener() {
+        this.dragAndDrop = dragAndDrop; // Store DragAndDrop
 
-            boolean take() {
-                if (Slot.this.container.getItems().isEmpty()) {
-                    takenItems.isTaken = false;
-                    takenItems.isSelect = false;
-                    return false;
-                }
+        // Add DragAndDrop Source and Target
+        addDragAndDrop();
+    }
 
-                takenItems.moveItems(Slot.this.container);
-                return true;
-            }
+    private void addDragAndDrop() {
+        // Source: When dragging starts from this slot
+        dragAndDrop.addSource(new Source(this) {
+            final Payload payload = new Payload();
 
-            void put() {
-                Slot.this.container.moveItems(takenItems);
-                if (takenItems.getItems().isEmpty()) {
-                    takenItems.isTaken = false;
-                    takenItems.isSelect = false;
-                    isSelect = false;
-                }
-            }
-
-            void swap() {
-                if (takenItems.isSelect && takenItems.selectItems != null && !isSelect) {
-                    Slot.this.container.moveItems(takenItems.selectItems);
-                    takenItems.selectItems = null;
-                    takenItems.clear = true;
-                    drag = false;
-                }
-            }
-
-            int i = 0;
             @Override
-            public void touchUp(InputEvent event, float x, float y, int pointer, int button) {
-                touchedDown = false;
-                SlotAllocateController.setAllocate(false);
-                SlotAllocateController.setLockScroll(false);
-                if((Slot.this.container.getItems().isEmpty()&&isSelect)) {
-                    takenItems.isSelect = isSelect = false;
-                    return;
+            public Payload dragStart(InputEvent event, float x, float y, int pointer) {
+                // Can't drag empty slots
+                if (container == null || container.getItems().isEmpty()) {
+                    return null;
+                } // <<< ADDED MISSING BRACE
+                // --- Revised dragStart ---
+                // Set the object being dragged (the source container itself)
+                payload.setObject(container);
+
+                // Create visual representation based on source container's content
+                // Do NOT move items out of the source container here.
+                Item itemToDrag = container.getItems().first();
+                int countToDrag = container.getCountItems();
+
+                Image itemImage = new Image(itemToDrag.getIcon());
+                itemImage.setSize(itemSize, itemSize);
+                payload.setDragActor(itemImage);
+
+                Label countLabel = new Label(String.valueOf(countToDrag), new Label.LabelStyle(font, Color.WHITE));
+                payload.setValidDragActor(countLabel);
+                payload.setInvalidDragActor(countLabel);
+
+                // Change source slot appearance only
+                Slot.this.getColor().a = 0.5f;
+
+                return payload;
+            }
+
+            @Override
+            public void dragStop(InputEvent event, float x, float y, int pointer, Payload payload, Target target) {
+                // Restore source slot appearance
+                // --- Revised dragStop ---
+                // Restore source slot appearance
+                Slot.this.getColor().a = 1f;
+
+                // If target is null, the drop was invalid/cancelled.
+                // Items were never removed from the source container in dragStart,
+                // so no need to return them here.
+            }
+        });
+
+        // Target: When an item is dragged over or dropped onto this slot
+        dragAndDrop.addTarget(new Target(this) {
+            @Override
+            public boolean drag(Source source, Payload payload, float x, float y, int pointer) {
+                // Get the container being dragged from the payload
+                Container sourceContainer = (Container) payload.getObject();
+                Container targetContainer = Slot.this.container; // This slot's container
+
+                // Check if this slot can accept the item type
+                // Valid if target accepts any type (-2) or target's required type matches source item's type
+                if (targetContainer.getAvailableType() != -2 && targetContainer.getAvailableType() != sourceContainer.getType()) {
+                    return false; // Type mismatch
                 }
 
-                if (hit(x, y, true) == null) return;
-                drag = true;
+                // Optional: Highlight the slot if it's a valid target
+                getActor().setColor(Color.LIGHT_GRAY); // Example highlight
+                return true; // It's a valid drop target (basic check)
+            }
 
+            @Override
+            public void reset(Source source, Payload payload) {
+                // Restore original appearance
+                getActor().setColor(Color.WHITE);
+            }
 
-                swap();
+            @Override
+            public void drop(Source source, Payload payload, float x, float y, int pointer) {
+                Container sourceContainer = (Container) payload.getObject();
+                Container targetContainer = Slot.this.container; // This slot's container
 
-                if(!Slot.this.container.getItems().isEmpty()) {
-                    if (isSelect = !isSelect) {
-                        takenItems.isSelect = isSelect;
-                        takenItems.selectItems = Slot.this.container;
+                // --- Item Transfer Logic (Revised) ---
+
+                // Attempt to add/merge items from source to target using the updated moveItems method
+                boolean success = targetContainer.moveItems(sourceContainer.getItems());
+
+                // If adding/merging failed (moveItems returned false), attempt a swap
+                if (!success) {
+                    // Check if items can be swapped (types compatible with both slots)
+                    Slot sourceSlot = (Slot) source.getActor();
+                    // Ensure target is not empty before getting its type for comparison
+                    int targetType = targetContainer.getItems().isEmpty() ? -1 : targetContainer.getType();
+
+                    boolean targetCanAcceptSource = targetContainer.getAvailableType() == -2 || targetContainer.getAvailableType() == sourceContainer.getType();
+                    boolean sourceCanAcceptTarget = sourceSlot.getContainer().getAvailableType() == -2 || sourceSlot.getContainer().getAvailableType() == targetType;
+
+                    // Also ensure target is not empty for a swap (cannot swap with empty)
+                    if (!targetContainer.getItems().isEmpty() && targetCanAcceptSource && sourceCanAcceptTarget) {
+                        // Use temporary containers for swapping
+                        // Use the Container.moveItems(Container) overload which handles compatibility checks internally
+                        Container tempTarget = new Container(targetContainer.getMaxCountItems());
+                        tempTarget.moveItems(targetContainer); // Move target items to temp
+
+                        // Try moving source items to target (should be empty now)
+                        targetContainer.moveItems(sourceContainer);
+
+                        // Try moving temp target items (original target items) to source
+                        sourceContainer.moveItems(tempTarget);
+
+                    } else {
+                        // Cannot add/merge and cannot swap. Drop fails.
+                        // Items remain in sourceContainer implicitly because moveItems didn't take them.
                     }
-                    if (takenItems.isTaken || !takenItems.isSelect) {
-                        takenItems.isSelect = false;
-                        isSelect = false;
-                    }
                 }
-
-                if (drag && (!isSelect))
-                    if (takenItems.getItems().isEmpty()) {
-                        if (take()) {
-                            takenItems.isTaken = true;
-                        }
-                    } else
-                        put();
-
-            }
-
-            @Override
-            public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
-                if(takenItems.isTaken||!takenItems.isSelect||!isSelect) return true;
-                SlotAllocateController.setLockScroll(true);
-                touchedDown = true;
-                touchPosition.set(x, y);
-                oldPosition.set(touchPosition);
-                return true;
-            }
-
-            @Override
-            public void touchDragged(InputEvent event, float x, float y, int pointer) {
-                if(touchedDown&&touchPosition.add(-x,-y).len()>getHeight()*0.5){
-                    SlotAllocateController.setAllocate(true);
-                } else
-                    touchPosition.set(oldPosition);
+                // If success is true, items were added/merged, sourceContainer.getItems() was modified accordingly.
             }
         });
     }
 
+
     public void setContainer(Container container){
+        // Need to handle potential null container if set externally after creation
+        if (container == null) {
+            this.container = new Container(0); // Or handle appropriately
+        }
         this.container = container;
     }
     @Override
     public void draw(Batch batch, float parentAlpha) {
-        if (takenItems.isTaken || !takenItems.isSelect || takenItems.clear) {
+        // Remove logic related to takenItems and isSelect
+        /* if (takenItems.isTaken || !takenItems.isSelect || takenItems.clear) {
             isSelect = false;
             takenItems.clear = false;
             takenItems.isSelect = false;
+        }*/
+        // Draw base slot texture
+        batch.draw(slotSkin.getSprite(), getX(), getY(), getWidth(), getHeight());
+        // Draw selection highlight if selected
+        if (isSelected) {
+            batch.draw(slotSkin.getSelectedTexture(), getX(), getY(), getWidth(), getHeight());
         }
-        batch.draw(isSelect ? slotSkin.getSelectedTexture() : slotSkin.getSprite(), getX(), getY(), getWidth(), getHeight());
-        if (container.getItems().notEmpty()) {
-            container.getItems().get(0).drawIcon(getX() + getWidth() * 0.1f, getY() + getHeight() * 0.1f, itemSize, itemSize);
+
+        // Draw item icon and count if container is not null and not empty
+        if (container != null && container.getItems().notEmpty()) {
+            // Ensure item exists before drawing
+            Item item = container.getItems().first(); // Use first() for safety
+            if (item != null) {
+                item.drawIcon(getX() + getWidth() * 0.1f, getY() + getHeight() * 0.1f, itemSize, itemSize);
+            }
+            // Draw count
             font.getData().setScale((18 / (18 / (getHeight() * 0.2f))) / 10);
             font.setColor(slotSkin.getCountTextColor());
             String value = String.valueOf(container.getCountItems());
-            font.draw(Graphic.batch, value, getX() + getWidth() * 0.8f - (font.getXHeight() * value.length() - font.getXHeight()), getY() + font.getLineHeight() * 0.9f);
+            // Use Graphic.batch if it's the intended batch, otherwise use the passed 'batch' parameter
+            font.draw(batch, value, getX() + getWidth() * 0.8f - (font.getXHeight() * value.length() - font.getXHeight()), getY() + font.getLineHeight() * 0.9f);
         }
     }
 
@@ -177,14 +239,10 @@ public class Slot extends Actor {
     public Container getContainer() {
         return container;
     }
+    // Removed hit method override related to SlotAllocateController
 
-    @Override
-    public Actor hit(float x, float y, boolean touchable) {
-        Actor actor = super.hit(x, y, touchable);
-        if(actor!=null){
-            SlotAllocateController.allocate(getContainer());
-        }
-        return actor;
+    public void setSelected(boolean selected) {
+        isSelected = selected;
     }
 
     public interface SlotSkin {
@@ -214,4 +272,5 @@ public class Slot extends Actor {
 
         Sprite getSelectedTexture();
     }
+    // Removed extra brace that might have been here
 }

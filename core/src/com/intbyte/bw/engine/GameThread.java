@@ -20,7 +20,7 @@ import com.intbyte.bw.engine.world.World;
 import com.intbyte.bw.engine.world.WorldConfig;
 import com.intbyte.bw.engine.render.GlobalEnvironment;
 import com.intbyte.bw.engine.ui.GUI;
-import com.intbyte.bw.engine.ui.container.TakenItemsRender;
+// import com.intbyte.bw.engine.ui.container.TakenItemsRender; // Remove import
 import com.intbyte.bw.engine.physic.Physic;
 
 
@@ -40,7 +40,8 @@ public class GameThread implements Screen {
         World.handler = new LocalChunkHandler(Player.getPlayer());
 
         render = new ChuncksRender();
-        Gdx.input.setInputProcessor(new InputMultiplexer(TakenItemsRender.listener, Graphic.stage, new GameInputProcessor(render.getCamera())));
+        // Remove TakenItemsRender.listener from InputMultiplexer
+        Gdx.input.setInputProcessor(new InputMultiplexer(Graphic.stage, new GameInputProcessor(render.getCamera())));
 
 
         entityManager = new EntityManager();
@@ -138,7 +139,3 @@ public class GameThread implements Screen {
 
     }
 }
-
-
-
-

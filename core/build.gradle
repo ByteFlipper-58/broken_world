@@ -1,7 +1,7 @@
 apply plugin: "java"
 apply plugin: 'kotlin'
 
-sourceCompatibility = 1.7
+sourceCompatibility = 1.8 // Update Java version to 1.8
 [compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
 
 sourceSets.main.java.srcDirs = [ "src/" ]
@@ -17,11 +17,7 @@ buildscript {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
-task cmd(type: Exec){
-    doFirst {commandLine 'sh', '-c', 'java -jar ' + project(":json_builder").buildDir.path+'/libs/json_builder-1.0.jar '+project(":core").projectDir.path}
-}
 
-compileJava.dependsOn cmd
 repositories {
     mavenCentral()
 }

@@ -15,6 +15,7 @@ import com.intbyte.bw.engine.utils.Resource;
 public class Player extends Entity {
     static Player player;
     float coolDown;
+    private int activeHotbarIndex = 0; // Index of the currently selected hotbar slot (0, 1, or 2)
 
     private ModelInstance modelInstance;
 
@@ -112,5 +113,39 @@ public class Player extends Entity {
     public void setCoolDown(float coolDown) {
         this.coolDown = coolDown;
     }
-}
 
+    public int getActiveHotbarIndex() {
+        return activeHotbarIndex;
+    }
+
+    public void setActiveHotbarIndex(int index) {
+        // Basic bounds check, assuming hotbar size of 3 (carriedItem + first 2 inventory)
+        if (index >= 0 && index < 3) {
+            this.activeHotbarIndex = index;
+        } else {
+            Gdx.app.error("PLAYER", "Attempted to set invalid hotbar index: " + index);
+            this.activeHotbarIndex = 0; // Default to 0 on error
+        }
+    }
+
+    /**
+     * Gets the container corresponding to the currently active hotbar slot.
+     * Index 0: carriedItem
+     * Index 1: inventory slot 0
+     * Index 2: inventory slot 1
+     * Returns an empty container if the index is invalid or inventory slot doesn't exist.
+     */
+    public Container getActiveHotbarContainer() {
+        switch (activeHotbarIndex) {
+            case 0:
+                return carriedItem;
+            case 1:
+                return inventory.size > 0 ? inventory.get(0) : new Container(0); // Return empty if slot doesn't exist
+            case 2:
+                return inventory.size > 1 ? inventory.get(1) : new Container(0); // Return empty if slot doesn't exist
+            default:
+                Gdx.app.error("PLAYER", "getActiveHotbarContainer called with invalid index: " + activeHotbarIndex);
+                return new Container(0); // Return empty container on error
+        }
+    }
+}

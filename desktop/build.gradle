@@ -31,7 +31,7 @@ task dist(type: Jar) {
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
-    with jar
+    // Removed 'with jar' line which might interfere with manifest attributes
 }
 
 

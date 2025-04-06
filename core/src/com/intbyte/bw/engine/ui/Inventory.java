@@ -4,10 +4,10 @@ import com.badlogic.gdx.graphics.g2d.Batch;
 import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop;
 import com.badlogic.gdx.utils.Array;
 import com.intbyte.bw.engine.item.Container;
 import com.intbyte.bw.engine.ui.container.Slot;
-import com.intbyte.bw.engine.ui.container.SlotAllocateController;
 
 public class Inventory extends Group {
     protected int elementsPerLine;
@@ -16,12 +16,14 @@ public class Inventory extends Group {
     protected Table scrollTable;
     protected Table layout;
     protected ScrollPane scrollPane;
+    protected final DragAndDrop dragAndDrop; // Add DragAndDrop field
 
     protected int defaultSize = 12;
 
-    public  Inventory(){
-        this(null);
-    }
+    // Remove default constructor or make it private if not needed
+    /* public  Inventory(){
+        this(null, null); // Would need a default DragAndDrop? Better to remove.
+    }*/
 
 
     @Override
@@ -37,8 +39,15 @@ public class Inventory extends Group {
         this.containers = containers;
     }
 
-    public Inventory(Array<Container> containers){
+    // Updated constructor to accept DragAndDrop
+    public Inventory(DragAndDrop dragAndDrop){
+        this(null, dragAndDrop);
+    }
+
+    // Updated constructor to accept DragAndDrop
+    public Inventory(Array<Container> containers, DragAndDrop dragAndDrop){
         this.containers = containers;
+        this.dragAndDrop = dragAndDrop; // Store DragAndDrop instance
         this.scrollTable = new Table();
         this.slots = new Array<>();
         this.scrollPane = new ScrollPane(scrollTable);
@@ -57,15 +66,23 @@ public class Inventory extends Group {
 
     public void apply(){
         scrollTable.clear();
+        // Ensure containers is not null before proceeding
+        if (this.containers == null) {
+            this.containers = new Array<>();
+        }
+
         int i = 0;
-        while (slots.size<containers.size) {
-            slots.add(new Slot(Slot.SlotSkin.DEFAULT, containers.get(i++)));
+        // Pre-create slots with DragAndDrop instance
+        while (slots.size < containers.size) {
+            // Pass dragAndDrop to Slot constructor
+            slots.add(new Slot(Slot.SlotSkin.DEFAULT, containers.get(i++), dragAndDrop));
         }
 
         for(i = 0; i < containers.size; i++){
-            slots.get(i).setSize(getWidth()/elementsPerLine);
-            slots.get(i).setContainer(containers.get(i));
-            scrollTable.add(slots.get(i));
+            // Slot already created with container and dragAndDrop, just configure size and add
+            slots.get(i).setSize(getSlotSize()); // Use getSlotSize() for consistency
+            // slots.get(i).setContainer(containers.get(i)); // Container is set in constructor now
+            scrollTable.add(slots.get(i)).size(getSlotSize()); // Add size constraint to table cell
             if((i+1)%elementsPerLine==0)
                 scrollTable.row();
         }
@@ -82,11 +99,11 @@ public class Inventory extends Group {
         batch.setColor(1,1,1,1);
     }
 
-    @Override
+    // Remove act method override related to SlotAllocateController
+    /* @Override
     public void act(float delta) {
         super.act(delta);
-        if(SlotAllocateController.isAllocate()||SlotAllocateController.isLockScroll())
-            scrollPane.cancel();
-
-    }
+        // if(SlotAllocateController.isAllocate()||SlotAllocateController.isLockScroll()) // Remove this check
+        //     scrollPane.cancel();
+    }*/
 }

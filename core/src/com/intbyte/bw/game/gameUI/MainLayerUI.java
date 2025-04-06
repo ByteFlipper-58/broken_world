@@ -7,6 +7,10 @@ import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener; // Import ClickListener
+import com.badlogic.gdx.scenes.scene2d.ui.Table; // Import Table
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop; // Import DragAndDrop
+import com.badlogic.gdx.utils.Array;
 import com.intbyte.bw.engine.callbacks.CallBack;
 import com.intbyte.bw.engine.callbacks.Render;
 import com.intbyte.bw.engine.entity.Player;
@@ -20,7 +24,7 @@ import com.intbyte.bw.engine.ui.Joystick;
 import com.intbyte.bw.engine.ui.Layer;
 import com.intbyte.bw.engine.ui.ProgressBar;
 import com.intbyte.bw.engine.ui.container.Slot;
-import com.intbyte.bw.engine.ui.container.TakenItemsRender;
+// import com.intbyte.bw.engine.ui.container.TakenItemsRender; // Remove import
 import com.intbyte.bw.engine.utils.Debug;
 import com.intbyte.bw.engine.utils.ExtraData;
 import com.intbyte.bw.engine.utils.Resource;
@@ -34,9 +38,12 @@ public class MainLayerUI extends Layer {
 
     private final Player player = Player.getPlayer();
     private final Label label;
+    private final DragAndDrop dragAndDrop; // Add DragAndDrop instance
+    // Remove local activeHotbarIndex, use player's state
 
 
     public MainLayerUI() {
+        dragAndDrop = new DragAndDrop(); // Create local DragAndDrop instance
         final GravityAdapter adapter = new GravityAdapter();
         final StringBuilder builder = new StringBuilder();
 
@@ -58,28 +65,68 @@ public class MainLayerUI extends Layer {
             }
         });
 
+        // --- Hotbar Setup ---
+        final float hotbarSlotSize = 80 * APIXEL; // Smaller size for hotbar slots
+        final Container carriedItemContainer = Player.getPlayer().getCarriedItem(); // Get carried item container
 
-        Slot slot = new Slot(Slot.SlotSkin.DEFAULT, Player.getPlayer().getCarriedItem());
-        slot.setSize(160 * APIXEL);
-        adapter.addActor(slot);
-        adapter.setGravity(GravityAttribute.BOTTOM, GravityAttribute.RIGHT);
-        addActor(slot);
+        // Create slots for hotbar
+        final Slot slot = new Slot(Slot.SlotSkin.DEFAULT, carriedItemContainer, dragAndDrop);
+        slot.setSize(hotbarSlotSize);
 
-        Slot slot2 = new Slot(Slot.SlotSkin.DEFAULT, new Container(1000));
-        slot2.setSize(160 * APIXEL);
-        slot2.addItems(Item.newItems("pickaxe", 1));
-        adapter.addActor(slot2);
-        adapter.tiedTo(GravityAttribute.RIGHT, slot);
-        adapter.setGravity(GravityAttribute.BOTTOM, GravityAttribute.RIGHT);
-        addActor(slot2);
+        // Link slot2 and slot3 to the first inventory containers
+        // Handle cases where inventory might have less than 2 items
+        final Container inventorySlot0 = player.getInventory().size > 0 ? player.getInventory().get(0) : new Container(0); // Use empty container if index invalid
+        final Container inventorySlot1 = player.getInventory().size > 1 ? player.getInventory().get(1) : new Container(0); // Use empty container if index invalid
+
+        final Slot slot2 = new Slot(Slot.SlotSkin.DEFAULT, inventorySlot0, dragAndDrop);
+        slot2.setSize(hotbarSlotSize);
+
+        final Slot slot3 = new Slot(Slot.SlotSkin.DEFAULT, inventorySlot1, dragAndDrop);
+        slot3.setSize(hotbarSlotSize);
+
+        // Add ClickListeners to set the active index
+        slot.addListener(new ClickListener() { // Add listener to the first slot too
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                player.setActiveHotbarIndex(0);
+            }
+        });
+        slot2.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                player.setActiveHotbarIndex(1);
+            }
+        });
+        slot3.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                player.setActiveHotbarIndex(2);
+            }
+        });
 
 
-        Slot slot3 = new Slot(Slot.SlotSkin.DEFAULT, new Container(1000));
-        slot3.setSize(160 * APIXEL);
-        adapter.addActor(slot3);
-        adapter.tiedTo(GravityAttribute.RIGHT, slot2);
-        adapter.setGravity(GravityAttribute.BOTTOM, GravityAttribute.RIGHT);
-        //addActor(slot3);
+        // Create a Table for the hotbar layout
+        Table hotbarTable = new Table();
+        hotbarTable.add(slot).size(hotbarSlotSize).pad(5 * APIXEL);
+        hotbarTable.add(slot2).size(hotbarSlotSize).pad(5 * APIXEL);
+        hotbarTable.add(slot3).size(hotbarSlotSize).pad(5 * APIXEL);
+
+        // Position the table at the bottom center
+        hotbarTable.pack(); // Calculate preferred size
+        hotbarTable.setPosition((Gdx.graphics.getWidth() - hotbarTable.getWidth()) / 2, 20 * APIXEL); // Position at bottom center with some padding
+        addActor(hotbarTable);
+
+        // Add Render callback to highlight the selected slot based on activeHotbarIndex
+        CallBack.addCallBack(new Render() {
+            @Override
+            public void main() {
+                // Set selection state based on player's activeHotbarIndex
+                int currentIndex = player.getActiveHotbarIndex();
+                slot.setSelected(currentIndex == 0);
+                slot2.setSelected(currentIndex == 1);
+                slot3.setSelected(currentIndex == 2);
+            }
+        });
 
 
         FreeTypeFontGenerator generator = new FreeTypeFontGenerator(Gdx.files.internal("fonts/jb_mono.ttf"));
@@ -122,8 +169,6 @@ public class MainLayerUI extends Layer {
                 bar.setState(player.getEndurance());
             }
         });
-        TakenItemsRender.initInstance();
-        TakenItemsRender.setRendering(true);
         adapter.apply();
 
     }
@@ -142,4 +187,22 @@ public class MainLayerUI extends Layer {
     public void destroy() {
         InteractionOfItems.setInteraction(false);
     }
+
+    // Remove swapContainers method as it's no longer used for selection
+    /* private void swapContainers(Container c1, Container c2) {
+        // Use temporary storage to swap items array and counts
+        Array<Item> tempItems = new Array<>(c1.getItems());
+        int tempMaxCount = c1.getMaxCountItems();
+        int tempAvailableType = c1.getAvailableType();
+
+        c1.clear();
+        c1.setMaxCountItems(c2.getMaxCountItems());
+        c1.setAvailableType(c2.getAvailableType());
+        c1.addItems(c2.getItems());
+
+        c2.clear();
+        c2.setMaxCountItems(tempMaxCount);
+        c2.setAvailableType(tempAvailableType);
+        c2.addItems(tempItems);
+    }*/
 }

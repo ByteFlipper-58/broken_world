@@ -13,36 +13,63 @@ public class Container {
         this.maxCountItems = maxCountItems;
     }
 
+    /**
+     * Attempts to add items from the source array into this container.
+     * Handles stacking only if item's stackSize > 1.
+     * Does NOT perform swaps. Modifies the source items array by removing added items.
+     * @param sourceItems The array of items to add from.
+     * @return true if any items were successfully added or merged, false otherwise.
+     */
+    public boolean moveItems(Array<Item> sourceItems) {
+        if (sourceItems.isEmpty()) return false; // Nothing to add
 
-    public void moveItems(Array<Item> items) {
-        if (items.isEmpty()) return;
-        if (this.items.isEmpty() || items.get(0).getId() == this.items.get(0).getId()) {
+        Item sourceItemExample = sourceItems.first(); // Item type being added
 
-            if (maxCountItems >= items.size + this.items.size && items.get(0).getStackSize() >= items.size + this.items.size) {
-                this.items.addAll(items);
-                items.clear();
-                return;
-            } else if (maxCountItems < items.size) {
-                while (this.items.size < maxCountItems)
-                    this.items.add(items.pop());
-                return;
+        // Case 1: Target container is empty
+        if (this.items.isEmpty()) {
+            // Check if the whole stack fits
+            if (sourceItems.size <= this.maxCountItems) {
+                this.items.addAll(sourceItems);
+                sourceItems.clear();
+                return true;
             }
-
-
-            if (this.items.size < maxCountItems && this.items.notEmpty() && this.items.get(0).getStackSize() > this.items.size) {
-                while (this.items.size < maxCountItems && this.items.get(0).getStackSize() > this.items.size)
-                    this.items.add(items.pop());
-                return;
+            // Check if item is stackable (even if target is empty, maybe source has > 1 non-stackable?)
+            // If stackable, add until full. If not stackable, add only one if possible.
+            else if (sourceItemExample.getStackSize() > 1) {
+                 while (this.items.size < this.maxCountItems && !sourceItems.isEmpty()) {
+                    this.items.add(sourceItems.pop());
+                 }
+                 return true; // Items were added
+            } else if (this.maxCountItems >= 1) { // Not stackable, add one if space exists
+                this.items.add(sourceItems.pop());
+                return true;
+            } else {
+                return false; // Cannot add even one item
             }
         }
+        // Case 2: Target container is NOT empty, check for matching IDs and stackability
+        else if (this.items.first().getId() == sourceItemExample.getId() &&
+                 this.items.first().getStackSize() > 1) { // Check stackability of items ALREADY in target
 
-        if(items.size>this.getMaxCountItems()) return;
-        Array<Item> itemArray = new Array<>();
-        itemArray.addAll(items);
-        items.clear();
-        items.addAll(this.items);
-        this.items = itemArray;
+            int spaceAvailable = this.maxCountItems - this.items.size;
+            if (spaceAvailable <= 0) return false; // Target is full
+
+            int itemsToMove = Math.min(spaceAvailable, sourceItems.size);
+
+            for (int i = 0; i < itemsToMove; i++) {
+                if (!sourceItems.isEmpty()) { // Should always be true here, but safety check
+                    this.items.add(sourceItems.pop());
+                } else {
+                    break; // Source became empty
+                }
+            }
+            return itemsToMove > 0; // Return true if we moved at least one item
+        }
+
+        // Case 3: Items are different, or target item is not stackable (stackSize=1)
+        return false; // Cannot add/merge, indicates a swap might be needed externally
     }
+
 
     public void moveItems(Container container){
 
@@ -56,9 +83,12 @@ public class Container {
                 getItems().isEmpty()))
             moveItems(container.getItems());
     }
+    // This method might be misleading now as moveItems returns boolean.
+    // Keep it for compatibility or refactor its usage.
+    // For now, let's assume it tries to move and returns the container.
     public Container addItems(Array<Item> items) {
-        moveItems(items);
-        return this;
+        moveItems(items); // Call the boolean version
+        return this;      // Return self regardless of success for compatibility
     }
 
     public int getMaxCountItems() {

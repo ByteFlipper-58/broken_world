@@ -21,13 +21,11 @@ import com.intbyte.bw.engine.entity.Entity;
 import com.intbyte.bw.engine.item.Container;
 import com.intbyte.bw.engine.block.Block;
 import com.intbyte.bw.engine.item.Item;
+import com.intbyte.bw.engine.item.ItemFactory;
 import com.intbyte.bw.engine.world.Tile;
 import com.intbyte.bw.engine.world.World;
 
 import java.util.HashMap;
-
-import static com.intbyte.bw.engine.item.Item.getItemFactories;
-
 
 public class InteractionOfItems {
     private static final Player player = Player.getPlayer();
@@ -131,29 +129,51 @@ public class InteractionOfItems {
             public void main(float x, float z) {
                 if (!InteractionOfItems.interaction) return;
                 interaction.builder.setLength(0);
-                interaction.container = player.getCarriedItem();
+                // Use the active hotbar container instead of just carriedItem
+                interaction.container = player.getActiveHotbarContainer();
+                // Check if container is valid and not empty before proceeding
+                if (interaction.container == null || interaction.container.getItems().isEmpty()) {
+                    interaction.id = null; // No item selected or container is empty
+                    return; // Cannot interact without an item
+                }
+
                 interaction.id = interaction.settableItemsHashMap.get(interaction.container.getId());
                 boolean set = true;
-                if (interaction.id == null) {
-                    interaction.id = interaction.container.getId();
-                    set = false;
-                } else {
-                    if (oldId != instance.id) {
+                if (interaction.id == null) { // If not a settable item, get the item's own ID for hit check
+                    interaction.id = interaction.container.getId(); // Use the item's ID itself
+                    set = false; // Cannot set this item as a block
+                } else { // It IS a settable item (a block)
+                    // Update preview model only if the settable block ID changed
+                    if (oldId != interaction.id) { // Use interaction.id (block ID) here
                         modelInstance = new ModelInstance(Block.getBlock(interaction.id).getModelInstance().model);
+                        oldId = interaction.id;
                     }
-                    oldId = interaction.id;
                 }
+
+                // Prevent interaction if dragging the placement preview
                 if (isDragged && !World.isCollision(x, z - 1)) {
                     return;
                 }
-                if (World.isCollision(x, z - 1) && Item.getItemFactories()[interaction.container.getId()] != null && player.getCoolDown() == 0 && Item.getItemFactories()[interaction.container.getId()].getType() != Item.BLOCK) {
-                    interaction.hit(x, z);
-                    return;
+
+                // Check if hitting an existing block
+                if (World.isCollision(x, z - 1)) {
+                    // Ensure we have a valid item factory for the selected item and it's not a block type itself
+                    ItemFactory selectedFactory = Item.getItemFactories()[interaction.container.getId()];
+                    if (selectedFactory != null && player.getCoolDown() == 0 && selectedFactory.getType() != Item.BLOCK) {
+                        interaction.hit(x, z); // Attempt to hit the block
+                        return;
+                    }
                 }
-                if (!(World.isCollision(x, z - 1)) && set) {
-                    isDragged = false;
-                    interaction.set(x, z);
+                // Check if placing a block
+                else if (set && !isDragged) { // 'set' is true if it's a placeable block item
+                    interaction.set(x, z); // Attempt to place the block
+                    isDragged = false; // Reset drag state after placement attempt
                 }
+                // If neither hitting nor placing, reset drag state
+                else {
+                   isDragged = false;
+                }
+
                 rectangle.setCenter(Integer.MIN_VALUE, Integer.MIN_VALUE);
             }
         });
@@ -164,13 +184,19 @@ public class InteractionOfItems {
     }
 
     synchronized private void hit(float x, float z) {
-        if (player.getCoolDown() > 0 || player.getEndurance() < 2) return;
+        // Use the active container determined in the callback
+        Container activeContainer = this.container; // Use the container set in the callback
+        if (activeContainer == null || activeContainer.getItems().isEmpty() || player.getCoolDown() > 0 || player.getEndurance() < 2) return;
 
-        if (container.getCountItems() != 0)
-            item = container.getLastElement();
-        container.getItems().get(container.getCountItems() - 1).getItemData().decrementStrength();
-        if (container.getItems().get(container.getItems().size - 1).getItemData().getStrength() <= 0) {
-            item = container.delete();
+        // Get the item from the active container
+        item = activeContainer.getLastElement(); // Assuming interaction always uses the last item?
+        if (item == null) return; // Should not happen if container is not empty, but safety check
+
+        // Decrement strength and potentially remove item
+        item.getItemData().decrementStrength();
+        if (item.getItemData().getStrength() <= 0) {
+            activeContainer.delete(); // Remove the item from the active container
+            item = null; // Item is broken/gone
         }
 
         Tile tile = World.getIntersectedTile(x, z - 1);
@@ -180,11 +206,15 @@ public class InteractionOfItems {
 
         BlockExtraData data = tile.getData();
         player.setCoolDown(player.getCoolDown() + item.getItemData().getCoolDown());
+        // If item broke, we can't deal damage
+        if (item == null) return;
+
         int blockLevel = tile.getBlock().getLevel();
         float damage = item.getItemData().getDamage();
         if (blockLevel != 0)
             damage = damage * ((float) item.getItemData().getLevel() / blockLevel);
-        if (getItemFactories()[id].getType() != customBlock.TYPE) {
+        // Use the item's type for comparison, not the potentially outdated 'id' field
+        if (item.getType() != customBlock.TYPE) {
             damage /= 10;
         }
         if (player.getEndurance() - item.getItemData().getTakeEndurance() < 0) {
@@ -194,9 +224,9 @@ public class InteractionOfItems {
 
         data.setHealth(data.getHealth() - Math.round(damage));
         builder.append("player hit to block with id ").
-                append(id).
+                append(tile.getID()). // Use getID() instead of getBlockID()
                 append(", used item with id ").
-                append(Player.getPlayer().getCarriedItem().getId()).
+                append(item.getId()). // Log the ID of the item used
                 append("; block health = ").
                 append(data.getHealth()).
                 append("; item damage = ").
@@ -206,11 +236,12 @@ public class InteractionOfItems {
                 append("; player coolDown = ").
                 append(player.getCoolDown()).
                 append(" item strength = ");
-
-        if (container.getItems().size != 0)
-            builder.append(container.getItems().get(container.getCountItems() - 1).getItemData().getStrength());
-        else
-            builder.append("0");
+        // Log strength of the item actually used, if it still exists
+        if (activeContainer.getItems().contains(item, true)) { // Check if item still exists
+             builder.append(item.getItemData().getStrength());
+        } else {
+             builder.append("BROKEN");
+        }
         builder.append("; x = ").
                 append(x).
                 append("; z = ").
@@ -234,18 +265,27 @@ public class InteractionOfItems {
     }
 
     private void set(float x, float z) {
-        isDragged = false;
-        if (World.isCollision(x, z - 1)) return;
+        // Use the active container determined in the callback
+        Container activeContainer = this.container;
+        if (activeContainer == null || activeContainer.getItems().isEmpty() || World.isCollision(x, z - 1)) return;
+
+        // 'id' (Integer) here should be the block ID determined in the callback
+        // Check this.id for null BEFORE assigning to int
+        if (this.id == null) return; // Check the Integer object for null
+        int blockIdToPlace = this.id; // Now it's safe to assign to int
+
         builder.append("player set block with id ").
-                append(id).
+                append(blockIdToPlace).
                 append(", used item with id ").
-                append(Player.getPlayer().getCarriedItem().getId()).
+                append(activeContainer.getId()).
                 append("; x = ").
                 append(x).
                 append("; z = ").
                 append(z);
-        Gdx.app.log("PLAYER", "player set block with id " + id + ", used item with id " + Player.getPlayer().getCarriedItem().getId() + "; x = " + x + "; z = " + z);
-        World.setBlock((rectangle.x + 5) / 10, (rectangle.y + 5) / 10, id);
-        container.delete();
+        Gdx.app.log("PLAYER", builder.toString());
+
+        World.setBlock((rectangle.x + 5) / 10, (rectangle.y + 5) / 10, blockIdToPlace);
+        activeContainer.delete();
+        isDragged = false;
     }
 }

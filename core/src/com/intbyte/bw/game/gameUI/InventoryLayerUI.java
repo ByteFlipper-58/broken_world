@@ -1,10 +1,15 @@
 package com.intbyte.bw.game.gameUI;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.g2d.BitmapFont; // Import BitmapFont
 import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator; // Import FreeTypeFontGenerator
 import com.badlogic.gdx.scenes.scene2d.Actor;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.InputListener;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.utils.DragAndDrop;
 import com.intbyte.bw.engine.entity.Player;
 import com.intbyte.bw.engine.graphic.GravityAdapter;
 import com.intbyte.bw.engine.graphic.GravityAttribute;
@@ -15,15 +20,28 @@ import com.intbyte.bw.engine.ui.Layer;
 import com.intbyte.bw.engine.ui.Panel;
 import com.intbyte.bw.engine.ui.container.Slot;
 import com.intbyte.bw.engine.utils.ExtraData;
-import com.intbyte.bw.engine.utils.Resource;
+import com.intbyte.bw.engine.utils.Resource; // Keep Resource import
+// Remove duplicate Resource import if present
+// import com.intbyte.bw.engine.utils.Resource;
 
 import static com.intbyte.bw.engine.item.Item.*;
 
 public class InventoryLayerUI extends Layer {
 
-    private Inventory inventory = new Inventory();
+    private final Inventory inventory;
+    private final DragAndDrop dragAndDrop;
 
     public InventoryLayerUI() {
+        dragAndDrop = new DragAndDrop();
+        inventory = new Inventory(dragAndDrop); // Pass DragAndDrop to Inventory
+
+        // Load font
+        FreeTypeFontGenerator generator = new FreeTypeFontGenerator(Gdx.files.internal("fonts/jetbrains_mono.ttf"));
+        FreeTypeFontGenerator.FreeTypeFontParameter parameter = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        parameter.size = 18; // Choose desired font size
+        BitmapFont font = generator.generateFont(parameter);
+        generator.dispose(); // Dispose generator
+
         final float padding = Gdx.graphics.getHeight() * 0.06f;
         float width = (Gdx.graphics.getWidth() - padding * 2 - padding) / 2;
         float height = Gdx.graphics.getHeight() - padding * 2;
@@ -46,28 +64,49 @@ public class InventoryLayerUI extends Layer {
         });
         addActor(actor);
 
-        Panel panel = new Panel("inventory");
+        // Panel 1 (Main Inventory)
+        Panel panel = new Panel("inventory"); // Consider a different background later
         panel.setSize(width, height);
         panel.setPosition(padding, padding);
         addActor(panel);
 
+        // Label for Panel 1 using loaded font
+        Label.LabelStyle labelStyle = new Label.LabelStyle(font, Color.WHITE);
+        Label inventoryLabel = new Label("Инвентарь", labelStyle);
+        inventoryLabel.setPosition(padding + TypedValue.APIXEL * 4, padding + height - inventoryLabel.getHeight() - TypedValue.APIXEL * 2);
+        // Add label later, after adapter.apply()
+
+
         GravityAdapter adapter = new GravityAdapter();
-        Panel panel2 = new Panel("inventory");
+        // Panel 2 (Equipment/Hotbar)
+        Panel panel2 = new Panel("inventory"); // Consider a different background later
         panel2.setSize(width, height);
         adapter.addActor(panel2);
         adapter.tiedTo(GravityAttribute.LEFT, panel);
         adapter.margin(padding, padding);
         addActor(panel2);
 
+        // Label for Panel 2 using loaded font
+        Label equipmentLabel = new Label("Снаряжение", labelStyle);
+        // Position label relative to panel2 after adapter.apply() might be better, but let's try this for now
+        equipmentLabel.setPosition(padding * 2 + width + TypedValue.APIXEL * 4, padding + height - equipmentLabel.getHeight() - TypedValue.APIXEL * 2);
+        // Add label later, after adapter.apply()
+
 
         inventory.setContainers(Player.getPlayer().getInventory());
-        inventory.setSize(width - padding * 2, height - padding * 2);
+        inventory.setSize(width - padding * 2, height - padding * 2); // Size is set relative to panel
         inventory.setElementsPerLine(5);
-        inventory.setPosition(padding, padding);
+        // Position is managed by the panel's layout, setting 0,0 relative to panel
+        inventory.setPosition(padding, padding); // Position inside the panel
         panel.addActor(inventory);
 
-        Slot firstItem = new Slot(Player.getPlayer().getCarriedItem()), secondItem = new Slot(1), thirdItem = new Slot(),
-                helmet = new Slot(1), armor = new Slot(1), leggings = new Slot(1);
+        // Create Slots and pass DragAndDrop
+        Slot firstItem = new Slot(Player.getPlayer().getCarriedItem(), dragAndDrop),
+             secondItem = new Slot(1, dragAndDrop), // Assuming Container constructor takes maxCount
+             thirdItem = new Slot(dragAndDrop),      // Assuming default constructor exists or Container(defaultMax)
+             helmet = new Slot(1, dragAndDrop),
+             armor = new Slot(1, dragAndDrop),
+             leggings = new Slot(1, dragAndDrop);
 
 
         final float slotSize = (panel2.getWidth() - padding * 4) / 3f * 0.85f;
@@ -126,6 +165,14 @@ public class InventoryLayerUI extends Layer {
 
         adapter.apply();
 
+        // Add labels after adapter has positioned panels
+        inventoryLabel.setPosition(panel.getX() + TypedValue.APIXEL * 4, panel.getY() + panel.getHeight() - inventoryLabel.getHeight() - TypedValue.APIXEL * 2);
+        equipmentLabel.setPosition(panel2.getX() + TypedValue.APIXEL * 4, panel2.getY() + panel2.getHeight() - equipmentLabel.getHeight() - TypedValue.APIXEL * 2);
+
+        addActor(inventoryLabel);
+        addActor(equipmentLabel);
+        inventoryLabel.toFront(); // Bring labels to front
+        equipmentLabel.toFront();
 
     }
 

@@ -19,7 +19,7 @@ buildscript {
 
     }
 }
-apply plugin: 'kotlin'
+// Remove root kotlin plugin apply plugin: 'kotlin'
 
 allprojects {
     apply plugin: "eclipse"
@@ -46,6 +46,8 @@ allprojects {
 
 project(":desktop") {
     apply plugin: "java-library"
+    sourceCompatibility = 1.8 // Ensure Java 1.8 compatibility
+    targetCompatibility = 1.8
 
 
     dependencies {
@@ -91,6 +93,8 @@ project(":android") {
 
 project(":json_builder"){
     apply plugin: "java-library"
+    sourceCompatibility = 1.8 // Ensure Java 1.8 compatibility
+    targetCompatibility = 1.8
     dependencies {
         api "com.badlogicgames.gdx:gdx:$gdxVersion"
         api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
@@ -99,7 +103,9 @@ project(":json_builder"){
 }
 project(":core") {
     apply plugin: "java-library"
-
+    apply plugin: 'kotlin' // Apply kotlin plugin here
+    sourceCompatibility = 1.8 // Ensure Java 1.8 compatibility
+    targetCompatibility = 1.8
 
 
     dependencies {
@@ -107,9 +113,24 @@ project(":core") {
         api "com.badlogicgames.ashley:ashley:1.7.3"
         api "com.badlogicgames.gdx:gdx:$gdxVersion"
         api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+        // Move Kotlin dependency here
+        implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    }
 
+    // Move Kotlin compilation settings here
+    compileKotlin {
+        kotlinOptions {
+            jvmTarget = "1.8"
+        }
+    }
+    compileTestKotlin {
+        kotlinOptions {
+            jvmTarget = "1.8"
+        }
     }
 }
+// Keep misplaced blocks commented out
+/*
 repositories {
     mavenCentral()
 }
@@ -126,3 +147,4 @@ compileTestKotlin {
         jvmTarget = "1.8"
     }
 }
+*/

@@ -1,7 +1,8 @@
 
+apply plugin: 'com.android.application' // Make sure the plugin is applied at the top
 
 android {
-
+    ndkVersion '21.4.7075529' // Specify the locally available NDK version
     buildToolsVersion "30.0.2"
 
     compileSdkVersion 30
