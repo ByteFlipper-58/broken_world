@@ -20,7 +20,6 @@ import com.intbyte.bw.engine.world.World;
 import com.intbyte.bw.engine.world.WorldConfig;
 import com.intbyte.bw.engine.render.GlobalEnvironment;
 import com.intbyte.bw.engine.ui.GUI;
-// import com.intbyte.bw.engine.ui.container.TakenItemsRender; // Remove import
 import com.intbyte.bw.engine.physic.Physic;
 
 
@@ -40,7 +39,6 @@ public class GameThread implements Screen {
         World.handler = new LocalChunkHandler(Player.getPlayer());
 
         render = new ChuncksRender();
-        // Remove TakenItemsRender.listener from InputMultiplexer
         Gdx.input.setInputProcessor(new InputMultiplexer(Graphic.stage, new GameInputProcessor(render.getCamera())));
 
 
@@ -79,25 +77,25 @@ public class GameThread implements Screen {
         }
         engine.update(delta);
 
-        Graphic.batch.begin();
-        CallBack.executeRenderCallBacks();
-        Graphic.batch.end();
+        // End model batch before starting sprite batch
         Graphic.getModelBatch().end();
+
+        // Consolidate sprite batch rendering
+        Graphic.batch.begin();
+        CallBack.executeRenderCallBacks(); // Render callbacks
+        Render.callBacks.get(0).main(); // Render callback 0
+        Graphic.batch.end();
+
+        // UI Stage rendering (uses its own batch internally)
         Graphic.stage.act();
         Graphic.stage.draw();
-        Graphic.batch.begin();
-        Render.callBacks.get(0).main();
-        Graphic.batch.end();
+
         isReadyCallBack = false;
         visible = 0;
 
-        if (Gdx.input.isKeyPressed(Input.Keys.SPACE)) {
+        // Improved input handling without sleep
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) { // Use isKeyJustPressed to trigger only once per press
             GUI.setLayer(GUI.isOpen("main") ? "inventory" : "main", null);
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
         }
 
         if (Gdx.input.isKeyPressed(Input.Keys.ESCAPE)) {

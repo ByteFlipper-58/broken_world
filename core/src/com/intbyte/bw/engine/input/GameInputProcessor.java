@@ -93,4 +93,18 @@ public class GameInputProcessor implements InputProcessor {
         return false;
     }
 
+    /**
+     * Called when a touch event is cancelled. This can happen if the platform determines the touch sequence should
+     * end prematurely (e.g., the application is interrupted).
+     * @param screenX The x coordinate, origin is in the upper left corner
+     * @param screenY The y coordinate, origin is in the upper left corner
+     * @param pointer the pointer for the event.
+     * @param button the button for the event.
+     * @return whether the input was processed
+     */
+    @Override
+    public boolean touchCancelled(int screenX, int screenY, int pointer, int button) {
+        // Default implementation, can be expanded if needed
+        return false;
+    }
 }
